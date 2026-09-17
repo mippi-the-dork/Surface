@@ -1,23 +1,24 @@
 {
 	"FileVersion": 3,
 	"Version": 2,
-	"VersionName": "1.0.2",
+	"VersionName": "1.0.3",
 	"FriendlyName": "Surface",
-	"Description": "Edit an Actor's component properties directly in its Details panel, with grouped components and safe matching across selected Actors.",
+	"Description": "Brings component properties into the Actor’s Details panel, with component filtering, favorites, and quick actor/component selection. Saves filters and expansion preferences between editor sessions.",
 	"Category": "Editor",
 	"CreatedBy": "Mippithedork",
 	"CreatedByURL": "",
 	"DocsURL": "",
 	"MarketplaceURL": "",
 	"SupportURL": "",
-	"EngineVersion": "5.8.0",
 	"CanContainContent": false,
-	"Installed": true,
+	"Installed": false,
 	"Modules": [
 		{
 			"Name": "Surface",
 			"Type": "Editor",
 			"LoadingPhase": "PostEngineInit"
 		}
-	]
+	],
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false
 }
