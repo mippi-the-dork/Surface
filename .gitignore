@@ -1,0 +1,22 @@
+# Unreal Engine Build Folders
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+
+# Local Packaged Archives
+*.zip
+*.7z
+*.rar
+
+# Visual Studio / IDE Files
+.vs/
+.idea/
+*.sln
+*.suo
+*.code-workspace
+*.xcworkspace/
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
