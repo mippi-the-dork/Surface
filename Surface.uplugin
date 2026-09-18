@@ -7,6 +7,7 @@
 	"Category": "Editor",
 	"CreatedBy": "Mippithedork",
 	"CreatedByURL": "",
+	"EngineVersion": "5.8.0",
 	"DocsURL": "",
 	"MarketplaceURL": "",
 	"SupportURL": "",
@@ -16,7 +17,10 @@
 		{
 			"Name": "Surface",
 			"Type": "Editor",
-			"LoadingPhase": "PostEngineInit"
+			"LoadingPhase": "PostEngineInit",
+			"PlatformAllowList": [
+        		"Win64"
+      			]
 		}
 	],
 	"IsBetaVersion": false,
