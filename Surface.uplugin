@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 2,
-	"VersionName": "1.0.3",
+	"VersionName": "1.0.4",
 	"FriendlyName": "Surface",
 	"Description": "Brings component properties into the Actor’s Details panel, with component filtering, favorites, and quick actor/component selection. Saves filters and expansion preferences between editor sessions.",
 	"Category": "Editor",
@@ -19,8 +19,8 @@
 			"Type": "Editor",
 			"LoadingPhase": "PostEngineInit",
 			"PlatformAllowList": [
-        		"Win64"
-      			]
+				"Win64"
+			]
 		}
 	],
 	"IsBetaVersion": false,
