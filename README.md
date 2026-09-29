@@ -165,39 +165,7 @@ Surface does not add runtime Actors, Components, or gameplay systems.
 
 ---
 
-> [!IMPORTANT]
-> **ATTENTION - README AUTHOR**
->
-> Capture the main Surface workflow here.
->
-> **Recommended visual:** GIF
->
-> Use an Actor with at least 5 Components.
->
-> Show:
->
-> 1. Select the Actor.
-> 2. Expand **Surface - Component Details**.
-> 3. Expand one Component.
-> 4. Edit a visible property.
-> 5. Search for another Component by name or class.
-> 6. Expand that Component.
-> 7. Edit another property.
-> 8. Clear the filter.
->
-> Keep both the World Outliner and Details panel visible, but make the Details panel large enough that the controls are easy to read.
->
-> Around 8 to 12 seconds is ideal.
->
-> **Suggested file:**
->
-> `Doc/Images/Surface-Component-Details.gif`
->
-> Once captured, replace this callout with:
->
-> ```markdown
-> ![Editing Actor component properties with Surface](Doc/Images/Surface-Component-Details.gif)
-> ```
+![Editing Actor component properties with Surface](Doc/Images/Surface-Component-Details.gif)
 
 ---
 
@@ -294,33 +262,7 @@ Select Actor
 Actor
 ```
 
-> [!IMPORTANT]
-> **ATTENTION - README AUTHOR**
->
-> Capture Actor and Component navigation here.
->
-> **Recommended visual:** GIF
->
-> Show:
->
-> 1. An Actor selected.
-> 2. Expand one Component inside Surface.
-> 3. Click **Select Component**.
-> 4. Show the Component's normal Details panel.
-> 5. Click **Select Actor**.
-> 6. Return to the Actor's Surface panel.
->
-> This can be short, around 5 to 8 seconds.
->
-> **Suggested file:**
->
-> `Doc/Images/Surface-Selection.gif`
->
-> Once captured, replace this callout with:
->
-> ```markdown
-> ![Navigating between Actors and Components with Surface](Doc/Images/Surface-Selection.gif)
-> ```
+![Navigating between Actors and Components with Surface](Doc/Images/Surface-Selection.gif)
 
 ---
 
@@ -493,34 +435,7 @@ Mesh - StaticMeshComponent
 
 This gives frequently edited Component properties a permanent location near the top of the Actor Details panel.
 
-> [!IMPORTANT]
-> **ATTENTION - README AUTHOR**
->
-> Capture Surface Favorites here.
->
-> **Recommended visual:** Screenshot
->
-> Use an Actor with at least 3 Components.
->
-> Favorite several useful properties across those Components.
->
-> Show:
->
-> **Surface - Favorites**
->
-> expanded with the properties grouped beneath their Component names.
->
-> Also keep **Surface - Component Details** visible below it so the relationship between the two sections is clear.
->
-> **Suggested file:**
->
-> `Doc/Images/Surface-Favorites.png`
->
-> Once captured, replace this callout with:
->
-> ```markdown
-> ![Surface component favorites grouped by component](Doc/Images/Surface-Favorites.png)
-> ```
+![Surface component favorites grouped by component](Doc/Images/Surface-Favorites.png)
 
 ---
 
@@ -622,7 +537,7 @@ Select the individual Actor if you need to edit that unmatched Component.
 Components added independently to individual Actor instances or generated with inconsistent names can prevent matching.
 
 ---
-
+<!--
 > [!IMPORTANT]
 > **ATTENTION - README AUTHOR**
 >
@@ -650,7 +565,7 @@ Components added independently to individual Actor instances or generated with i
 > ```markdown
 > ![Editing matching components across multiple Actors with Surface](Doc/Images/Surface-Multi-Selection.gif)
 > ```
-
+-->
 ---
 
 # Saved Preferences
