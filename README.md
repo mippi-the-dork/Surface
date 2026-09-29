@@ -12,43 +12,7 @@ Spend less time selecting individual Components just to find the property you ne
 ![Version](https://img.shields.io/badge/Version-1.0.4-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-> [!IMPORTANT]
-> **ATTENTION - README AUTHOR**
->
-> Capture the primary hero image for Surface here.
->
-> **Recommended visual:** Side-by-side screenshot
->
-> Use the same Actor in both images.
->
-> **Before:** Show the Actor's normal Details panel, where its component properties are not directly available without selecting individual Components.
->
-> **After:** Show the same Actor with **Surface - Favorites** and **Surface - Component Details** visible beneath Transform, with several component headers expanded.
->
-> Use an Actor containing a useful variety of Components, such as:
->
-> - Static Mesh Component
-> - Point Light Component
-> - Audio Component
-> - Box or Sphere Collision Component
-> - Scene Component
->
-> The goal is to immediately communicate:
->
-> **Surface lets you work with the Actor and its Components from one Details panel.**
->
-> **Suggested files:**
->
-> - `Doc/Images/Surface-Before.png`
-> - `Doc/Images/Surface-After.png`
->
-> Once captured, replace this callout with:
->
-> ```markdown
-> | Standard Actor Details | Actor Details with Surface |
-> |---|---|
-> | ![Standard Unreal Engine Actor Details panel](Doc/Images/Surface-Before.png) | ![Actor Details panel with Surface](Doc/Images/Surface-After.png) |
-> ```
+![Surface](Doc/Images/Surface-Hero.png)
 
 ---
 
