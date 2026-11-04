@@ -1,15 +1,17 @@
 # Surface
 
+> **2.0 development alpha:** Performance instrumentation and conditional lazy layouts for collapsed components with no Favorites are implemented but not yet engine-validated. See [ROADMAP.md](ROADMAP.md) and [DEV_NOTES.md](DEV_NOTES.md).
+
 **Edit component properties directly from an Actor's Details panel in Unreal Engine.**
 
 Surface brings an Actor's component properties together into its main Details panel, with component filtering, favorites, persistent UI preferences, and quick navigation between Actors and Components.
 
 Spend less time selecting individual Components just to find the property you need.
 
-![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8.2-black?logo=unrealengine)
+![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8.3-black?logo=unrealengine)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2064--bit-blue)
 ![Type](https://img.shields.io/badge/Plugin-Editor%20Only-green)
-![Version](https://img.shields.io/badge/Version-1.0.4-blue)
+![Version](https://img.shields.io/badge/Version-2.0.0--alpha.2-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ![Surface](Doc/Images/Surface-Hero.png)

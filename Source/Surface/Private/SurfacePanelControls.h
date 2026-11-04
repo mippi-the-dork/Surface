@@ -1,4 +1,4 @@
-﻿// Copyright Mippithedork 2026, Inc. All Rights Reserved.
+// Copyright Mippithedork 2026, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -60,6 +60,36 @@ namespace SurfacePanel
         // Explicitly stores the latest open/closed choice.
         // This is independent of Unreal's custom-node expansion cache.
         TSet<FString> ExpandedComponents;
+
+        // Session-only negative Favorite cache. Never persist property handles or
+        // UObject pointers across Details reconstructions. A cached "no favorites"
+        // result permits a collapsed group to omit its entire external layout.
+        // Groups with Favorites continue to use Unreal's native layout path.
+        struct FFavoritePresence
+        {
+            TWeakObjectPtr<UClass> ComponentClass;
+            bool bHasFavorites = false;
+        };
+        TMap<FString, FFavoritePresence> FavoritePresence;
+
+        bool NeedsExternalLayout(const FString& Id, const UClass* Class) const
+        {
+            if (ExpandedComponents.Contains(Id))
+            {
+                return true;
+            }
+            const FFavoritePresence* Cached = FavoritePresence.Find(Id);
+            return Cached == nullptr || Cached->ComponentClass.Get() != Class || Cached->bHasFavorites;
+        }
+
+        void RememberFavorites(const FString& Id, UClass* Class, bool bHasFavorites)
+        {
+            FFavoritePresence& Cached = FavoritePresence.FindOrAdd(Id);
+            Cached.ComponentClass = Class;
+            Cached.bHasFavorites = bHasFavorites;
+        }
+
+        void InvalidateFavoritePresence() { FavoritePresence.Reset(); }
 
         FText SearchText;
         FString SearchQuery;
