@@ -5,6 +5,8 @@
 #include "ComponentDetailsMatching.h"
 #include "SurfacePanelControls.h"
 #include "SurfaceProfiling.h"
+#include "SurfaceMovementPolicy.h"
+#include "SurfaceMovementSettings.h"
 
 #include "BlueprintEditorSettings.h"
 #include "Components/ActorComponent.h"
@@ -786,6 +788,15 @@ void FSurfaceCustomization::AddComponentDetails(
         Actors.Add(Actor);
     }
 
+    for (AActor* Actor : Actors)
+    {
+        if (SurfaceProfiling::IsMovingActor(Actor))
+        {
+            SurfaceProfiling::Record(SurfaceProfiling::EStage::CustomizeDuringMovement, 0.0);
+            break;
+        }
+    }
+
     // A separate category gives Favorites its own expansion state.
     IDetailCategoryBuilder& FavoritesCategory =
         DetailBuilder.EditCategory(
@@ -808,11 +819,23 @@ void FSurfaceCustomization::AddComponentDetails(
     const TSharedRef<SurfacePanel::FState> PanelState =
         SurfacePanel::GetState(DetailBuilder, Actors);
 
+    // Recheck cached negative Favorites after actor reconstruction completes.
+    // We only clear the cache outside the drag, preserving the fast movement path.
+    const uint64 FavoritesRevision = SurfaceMovementPolicy::GetFavoritesRefreshRevision();
+    if (PanelState->LastFavoritesRefreshRevision != FavoritesRevision)
+    {
+        PanelState->InvalidateFavoritePresence();
+        PanelState->LastFavoritesRefreshRevision = FavoritesRevision;
+    }
+
     SurfacePanel::ConfigureCategory(FavoritesCategory, PanelState, true);
     SurfacePanel::ConfigureCategory(Category, PanelState, false);
 
     const TWeakPtr<IPropertyUtilities> WeakUtilities =
         DetailBuilder.GetPropertyUtilities();
+
+    SurfaceMovementPolicy::ObserveDetails(Actors, WeakUtilities);
+    const bool bLightweightDuringMovement = SurfaceMovementPolicy::IsLightweightForSelection(Actors);
 
     // Changes to native favorites made in a different Details view cannot
     // safely be inferred from cached, already-destroyed property handles.
@@ -925,6 +948,11 @@ void FSurfaceCustomization::AddComponentDetails(
         }
 
         const FString ComponentId = Group.StableId;
+        for (int32 ComponentIndex = 0; ComponentIndex < ExternalObjects.Num(); ++ComponentIndex)
+        {
+            SurfaceProfiling::ObserveComponent(Actors[ComponentIndex], ComponentId,
+                Cast<UActorComponent>(ExternalObjects[ComponentIndex]));
+        }
         const FText ComponentLabel = Group.Label;
 
         const TArray<TWeakObjectPtr<UActorComponent>> ComponentsToSelect =
@@ -1059,6 +1087,45 @@ void FSurfaceCustomization::AddComponentDetails(
                         })
             ];
 
+        // During actor movement do not construct external rows against transient
+        // Construction Script component instances. Header/filter controls remain.
+        // End movement requests one fresh Details pass against current objects.
+        if (bLightweightDuringMovement)
+        {
+            SurfaceProfiling::Record(SurfaceProfiling::EStage::MovementLayoutSuppressed, 0.0);
+            // We deliberately DO NOT retain stale live property handles/widgets.
+            // A lightweight reserved-height row avoids collapsing the entire
+            // expanded component section on every construction-script update.
+            const USurfaceMovementSettings* MovementSettings = GetDefault<USurfaceMovementSettings>();
+            if (MovementSettings->bPreservePanelSpaceDuringMovement &&
+                PanelState->ExpandedComponents.Contains(ComponentId))
+            {
+                const float ReservedHeight = FMath::Clamp(MovementSettings->FrozenComponentHeight, 48.0f, 2000.0f);
+                Category.AddCustomRow(LOCTEXT("FrozenComponentDetails", "Frozen component details"))
+                    .Visibility(TAttribute<EVisibility>::CreateLambda(
+                        [PanelState, ComponentId, ComponentLabel]()
+                        {
+                            return PanelState->ExpandedComponents.Contains(ComponentId) &&
+                                PanelState->PassesFilter(ComponentId, ComponentLabel)
+                                ? EVisibility::Visible : EVisibility::Collapsed;
+                        }))
+                    .WholeRowContent()
+                    [
+                        SNew(SBox)
+                            .HeightOverride(ReservedHeight)
+                            .Padding(FMargin(12.0f, 8.0f))
+                            .HAlign(HAlign_Left)
+                            .VAlign(VAlign_Top)
+                            [
+                                SNew(STextBlock)
+                                    .Text(LOCTEXT("FrozenSurfaceNotice", "Component values paused during movement"))
+                                    .ColorAndOpacity(FSlateColor::UseSubduedForeground())
+                            ]
+                    ];
+            }
+            continue;
+        }
+
         // Surface's native Favorites are generated by the embedded layout.
         // After one successful zero-Favorites inspection, a collapsed group
         // can skip that whole layout on subsequent reconstructions. Expanded
@@ -1068,6 +1135,15 @@ void FSurfaceCustomization::AddComponentDetails(
         {
             SurfaceProfiling::RecordSkippedLayout();
             continue;
+        }
+
+        if (PanelState->ExpandedComponents.Contains(ComponentId))
+        {
+            SurfaceProfiling::Record(SurfaceProfiling::EStage::ExpandedGroupLayout, 0.0);
+        }
+        else
+        {
+            SurfaceProfiling::Record(SurfaceProfiling::EStage::CollapsedFavoriteLayout, 0.0);
         }
 
         FAddPropertyParams Params;
@@ -1097,6 +1173,10 @@ void FSurfaceCustomization::AddComponentDetails(
             // The component layout, including its sort callbacks, is generated
             // synchronously while this external row is constructed.
             {
+                if (SurfaceProfiling::IsMovingActor(Actors[0]))
+                {
+                    SurfaceProfiling::Record(SurfaceProfiling::EStage::ExternalLayoutDuringMovement, 0.0);
+                }
                 SurfaceProfiling::FScopedStage LayoutTiming(SurfaceProfiling::EStage::ExternalLayout);
                 PropertyRow = Category.AddExternalObjects(
                     ExternalObjects,
@@ -1165,13 +1245,27 @@ void FSurfaceCustomization::AddComponentDetails(
         FavoriteCount += Capture->Properties.Num();
     }
 
+    if (bLightweightDuringMovement)
+    {
+        FavoritesCategory.AddCustomRow(LOCTEXT("MovingFavoritesSuspended", "Favorites paused while moving"))
+            .WholeRowContent()[
+                SNew(STextBlock)
+                    .Text(LOCTEXT("SurfaceMovingFavoritesNotice", "Favorites refresh when actor movement ends."))
+                    .ColorAndOpacity(FSlateColor::UseSubduedForeground())
+            ];
+
+    }
+
     // Record defaults once after discovering the complete list, not once per component.
     {
         SurfaceProfiling::FScopedStage SaveTiming(SurfaceProfiling::EStage::PersistPanelState);
-        PanelState->Save();
+        if (PanelState->bDiscoveredDefaultsDirty)
+        {
+            PanelState->SaveDiscoveredDefaultsIfNeeded();
+        }
     }
 
-    if (FavoriteCount == 0)
+    if (FavoriteCount == 0 && !bLightweightDuringMovement)
     {
         AddNotice(
             FavoritesCategory,

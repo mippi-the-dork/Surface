@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Containers/Array.h"
+#include "Delegates/Delegate.h"
 #include "Misc/Optional.h"
 #include "Modules/ModuleInterface.h"
 #include "PropertyEditorDelegates.h"
@@ -34,4 +35,6 @@ private:
     };
 
     TArray<FLayoutRegistration> Registrations;
+    FDelegateHandle BeginMovementHandle;
+    FDelegateHandle EndMovementHandle;
 };

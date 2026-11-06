@@ -1,6 +1,6 @@
 # Surface
 
-> **2.0 development alpha:** Performance instrumentation and conditional lazy layouts for collapsed components with no Favorites are implemented but not yet engine-validated. See [ROADMAP.md](ROADMAP.md) and [DEV_NOTES.md](DEV_NOTES.md).
+> **2.0 development alpha:** Movement-time layout suppression is retained, with new height-preserving placeholders and post-movement Favorites cache invalidation. This Alpha 6 source requires UE 5.8.3 compilation and verification. See [ROADMAP.md](ROADMAP.md) and [DEV_NOTES.md](DEV_NOTES.md).
 
 **Edit component properties directly from an Actor's Details panel in Unreal Engine.**
 
@@ -11,7 +11,7 @@ Spend less time selecting individual Components just to find the property you ne
 ![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8.3-black?logo=unrealengine)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2064--bit-blue)
 ![Type](https://img.shields.io/badge/Plugin-Editor%20Only-green)
-![Version](https://img.shields.io/badge/Version-2.0.0--alpha.2-orange)
+![Version](https://img.shields.io/badge/Version-2.0.0--alpha.6-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ![Surface](Doc/Images/Surface-Hero.png)
@@ -1185,3 +1185,8 @@ The plugin was built around a simple idea:
 > If a Component belongs to an Actor, you should not have to leave the Actor just to work with it.
 
 Surface turns the Actor Details panel into a more complete view of the thing you're actually editing.
+
+
+### Surface 2.0 Alpha 4 profiling
+
+Run `Surface.Profile.Start`, drag an Actor, and run `Surface.Profile.Stop`. New diagnostic stages: `MovementBegin`, `MovementEnd`, `CustomizeDuringMovement`, `ExternalLayoutDuringMovement`, `ComponentInstanceReplaced`, and `ComponentInstanceUnchanged`. These counters introduce no change to native Details refresh behavior.

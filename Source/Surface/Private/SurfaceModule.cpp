@@ -1,8 +1,12 @@
-﻿// Copyright Mippithedork 2026, Inc. All Rights Reserved.
+// Copyright Mippithedork 2026, Inc. All Rights Reserved.
 
 #include "SurfaceModule.h"
 
 #include "SurfaceCustomization.h"
+#include "SurfaceProfiling.h"
+#include "SurfaceMovementPolicy.h"
+#include "Editor.h"
+#include "Editor/EditorEngine.h"
 
 #include "Components/ActorComponent.h"
 #include "CoreGlobals.h"
@@ -100,10 +104,25 @@ void FSurfaceModule::StartupModule()
     RegisterComposite(UActorComponent::StaticClass()->GetFName());
 
     PropertyEditor.NotifyCustomizationModuleChanged();
+
+    if (GEditor != nullptr)
+    {
+        BeginMovementHandle = GEditor->OnBeginObjectMovement().AddLambda([](UObject& Object) { SurfaceProfiling::BeginObjectMovement(Object); SurfaceMovementPolicy::BeginObjectMovement(Object); });
+        EndMovementHandle = GEditor->OnEndObjectMovement().AddLambda([](UObject& Object) { SurfaceProfiling::EndObjectMovement(Object); SurfaceMovementPolicy::EndObjectMovement(Object); });
+    }
 }
 
 void FSurfaceModule::ShutdownModule()
 {
+    if (GEditor != nullptr)
+    {
+        if (BeginMovementHandle.IsValid()) { GEditor->OnBeginObjectMovement().Remove(BeginMovementHandle); }
+        if (EndMovementHandle.IsValid()) { GEditor->OnEndObjectMovement().Remove(EndMovementHandle); }
+    }
+    BeginMovementHandle.Reset();
+    EndMovementHandle.Reset();
+    SurfaceMovementPolicy::Reset();
+
     // Never load modules during shutdown.
     FPropertyEditorModule* PropertyEditor =
         FModuleManager::GetModulePtr<FPropertyEditorModule>(

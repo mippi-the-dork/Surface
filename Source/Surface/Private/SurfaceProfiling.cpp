@@ -2,6 +2,9 @@
 #include "SurfaceProfiling.h"
 
 #include "HAL/IConsoleManager.h"
+#include "Components/ActorComponent.h"
+#include "GameFramework/Actor.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 #include "Logging/LogMacros.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogSurfaceProfile, Log, All);
@@ -12,6 +15,16 @@ namespace SurfaceProfiling
     {
         bool bActive = false;
         FSnapshot Stages[static_cast<int32>(EStage::Count)];
+        // Profiling-only weak identity snapshots. Do not retain object lifetimes.
+        TMap<TWeakObjectPtr<AActor>, TMap<FString, TWeakObjectPtr<UActorComponent>>> ObservedComponents;
+        TSet<TWeakObjectPtr<AActor>> MovingActors;
+
+        AActor* ResolveActor(UObject& Object)
+        {
+            if (AActor* Actor = Cast<AActor>(&Object)) { return Actor; }
+            if (UActorComponent* Component = Cast<UActorComponent>(&Object)) { return Component->GetOwner(); }
+            return nullptr;
+        }
     }
 
     bool IsActive() { return bActive; }
@@ -28,6 +41,8 @@ namespace SurfaceProfiling
     }
     void Reset()
     {
+        ObservedComponents.Reset();
+        MovingActors.Reset();
         for (FSnapshot& Stage : Stages)
         {
             Stage = FSnapshot();
@@ -56,6 +71,47 @@ namespace SurfaceProfiling
         Stats.MaximumMs = FMath::Max(Stats.MaximumMs, ElapsedMs);
     }
     void RecordSkippedLayout() { Record(EStage::SkippedExternalLayout, 0.0); }
+    void BeginObjectMovement(UObject& Object)
+    {
+        if (!bActive) { return; }
+        AActor* Actor = ResolveActor(Object);
+        if (Actor && !MovingActors.Contains(Actor))
+        {
+            MovingActors.Add(Actor);
+            Record(EStage::MovementBegin, 0.0);
+        }
+    }
+    void EndObjectMovement(UObject& Object)
+    {
+        if (!bActive) { return; }
+        AActor* Actor = ResolveActor(Object);
+        if (Actor && MovingActors.Remove(Actor) > 0)
+        {
+            Record(EStage::MovementEnd, 0.0);
+        }
+    }
+    bool IsMovingActor(AActor* Actor)
+    {
+        return bActive && Actor && MovingActors.Contains(Actor);
+    }
+    void ObserveComponent(AActor* Actor, const FString& StableId, UActorComponent* Component)
+    {
+        if (!bActive || !Actor || !IsValid(Component)) { return; }
+        // Weak pointers permit observation of invalidated Construction Script instances.
+        auto& Map = ObservedComponents.FindOrAdd(Actor);
+        if (TWeakObjectPtr<UActorComponent>* Previous = Map.Find(StableId))
+        {
+            if (Previous->Get() == Component)
+            {
+                Record(EStage::ComponentInstanceUnchanged, 0.0);
+            }
+            else
+            {
+                Record(EStage::ComponentInstanceReplaced, 0.0);
+            }
+        }
+        Map.Add(StableId, Component);
+    }
     const TCHAR* GetStageName(EStage Stage)
     {
         switch (Stage)
@@ -64,8 +120,17 @@ namespace SurfaceProfiling
         case EStage::ComponentMatching: return TEXT("ComponentMatching");
         case EStage::ExternalLayout: return TEXT("ExternalLayout");
         case EStage::SkippedExternalLayout: return TEXT("SkippedExternalLayout");
+        case EStage::ExpandedGroupLayout: return TEXT("ExpandedGroupLayout");
+        case EStage::CollapsedFavoriteLayout: return TEXT("CollapsedFavoriteLayout");
         case EStage::FavoriteCollection: return TEXT("FavoriteCollection");
         case EStage::PersistPanelState: return TEXT("PersistPanelState");
+        case EStage::MovementBegin: return TEXT("MovementBegin");
+        case EStage::MovementEnd: return TEXT("MovementEnd");
+        case EStage::CustomizeDuringMovement: return TEXT("CustomizeDuringMovement");
+        case EStage::ExternalLayoutDuringMovement: return TEXT("ExternalLayoutDuringMovement");
+        case EStage::MovementLayoutSuppressed: return TEXT("MovementLayoutSuppressed");
+        case EStage::ComponentInstanceReplaced: return TEXT("ComponentInstanceReplaced");
+        case EStage::ComponentInstanceUnchanged: return TEXT("ComponentInstanceUnchanged");
         default: return TEXT("Unknown");
         }
     }
@@ -83,6 +148,7 @@ namespace SurfaceProfiling
                 Stats.MaximumMs);
         }
         UE_LOG(LogSurfaceProfile, Display, TEXT("ExternalLayout calls count rows created, not properties inside each row."));
+        UE_LOG(LogSurfaceProfile, Display, TEXT("Movement suppression affects only Surface external rows; native Details remain engine-owned."));
     }
 }
 

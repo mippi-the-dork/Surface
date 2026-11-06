@@ -3,6 +3,8 @@
 
 #include "CoreMinimal.h"
 #include "HAL/PlatformTime.h"
+class AActor;
+class UActorComponent;
 
 namespace SurfaceProfiling
 {
@@ -12,8 +14,17 @@ namespace SurfaceProfiling
         ComponentMatching,
         ExternalLayout,
         SkippedExternalLayout,
+        ExpandedGroupLayout,
+        CollapsedFavoriteLayout,
         FavoriteCollection,
         PersistPanelState,
+        MovementBegin,
+        MovementEnd,
+        CustomizeDuringMovement,
+        ExternalLayoutDuringMovement,
+        MovementLayoutSuppressed,
+        ComponentInstanceReplaced,
+        ComponentInstanceUnchanged,
         Count
     };
 
@@ -32,6 +43,10 @@ namespace SurfaceProfiling
     FSnapshot GetSnapshot(EStage Stage);
     void Record(EStage Stage, double ElapsedMs);
     void RecordSkippedLayout();
+    void BeginObjectMovement(UObject& Object);
+    void EndObjectMovement(UObject& Object);
+    bool IsMovingActor(AActor* Actor);
+    void ObserveComponent(AActor* Actor, const FString& StableId, UActorComponent* Component);
     const TCHAR* GetStageName(EStage Stage);
     void Report();
 

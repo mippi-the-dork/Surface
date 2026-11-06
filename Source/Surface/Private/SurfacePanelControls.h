@@ -53,6 +53,8 @@ namespace SurfacePanel
 
         FString ConfigSection;
         TSet<FString> KnownComponents;
+        // Only newly discovered defaults need writing during customization.
+        bool bDiscoveredDefaultsDirty = false;
         TSet<FString> HiddenComponents;
         bool bComponentsExpanded = false;
         bool bFavoritesExpanded = true;
@@ -71,6 +73,7 @@ namespace SurfacePanel
             bool bHasFavorites = false;
         };
         TMap<FString, FFavoritePresence> FavoritePresence;
+        uint64 LastFavoritesRefreshRevision = 0;
 
         bool NeedsExternalLayout(const FString& Id, const UClass* Class) const
         {
@@ -159,6 +162,17 @@ namespace SurfacePanel
                 bFavoritesExpanded, GEditorPerProjectIni);
         }
 
+        bool SaveDiscoveredDefaultsIfNeeded()
+        {
+            if (!bDiscoveredDefaultsDirty)
+            {
+                return false;
+            }
+            Save();
+            bDiscoveredDefaultsDirty = false;
+            return true;
+        }
+
         void AddItem(const FComponentItem& Item)
         {
             Items.Add(Item);
@@ -167,6 +181,7 @@ namespace SurfacePanel
             if (!KnownComponents.Contains(Item.Id))
             {
                 KnownComponents.Add(Item.Id);
+                bDiscoveredDefaultsDirty = true;
                 if (!Item.DefaultHiddenReason.IsEmpty())
                 {
                     HiddenComponents.Add(Item.Id);
