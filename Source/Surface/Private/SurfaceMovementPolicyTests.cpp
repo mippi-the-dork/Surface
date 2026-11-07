@@ -16,7 +16,7 @@ bool FSurfaceMovementLightweightPolicyTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Moving actor skips external layouts"), ShouldSkipExternalLayout(true, true));
     TestNotNull(TEXT("Developer setting exists"), GetDefault<USurfaceMovementSettings>());
     TestFalse(TEXT("No actor selection is never lightweight"), IsLightweightForSelection(TArray<AActor*>()));
-    TestTrue(TEXT("Panel-space preservation is available"), GetDefault<USurfaceMovementSettings>()->FrozenComponentHeight >= 48.0f);
+    TestTrue(TEXT("Panel-space preservation setting is available"), GetDefault<USurfaceMovementSettings>()->bPreservePanelSpaceDuringMovement);
     const uint64 RevisionBefore = GetFavoritesRefreshRevision();
     TestEqual(TEXT("Querying favorites revision does not mutate it"), GetFavoritesRefreshRevision(), RevisionBefore);
     return true;

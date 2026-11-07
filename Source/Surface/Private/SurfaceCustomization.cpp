@@ -7,6 +7,8 @@
 #include "SurfaceProfiling.h"
 #include "SurfaceMovementPolicy.h"
 #include "SurfaceMovementSettings.h"
+#include "SurfaceHeightProbe.h"
+#include "SurfaceFrozenSnapshot.h"
 
 #include "BlueprintEditorSettings.h"
 #include "Components/ActorComponent.h"
@@ -609,6 +611,68 @@ namespace
             ];
     }
 
+    void AddSectionHeightMarker(
+        IDetailCategoryBuilder& Category,
+        const TSharedRef<SurfacePanel::FState>& State,
+        const FString& Id,
+        bool bTop,
+        bool bFavorites,
+        const FText& Label,
+        uint64 Generation)
+    {
+        // A zero-height row on either side of a native layout measures its
+        // actual on-screen size. Avoid retaining its property widgets or handles.
+        Category.AddCustomRow(Label)
+            .WholeRowContent()
+            [
+                SNew(SSurfaceHeightProbe)
+                    .OnPosition([State, Id, bTop, bFavorites, Generation](float Y)
+                    {
+                        if (bFavorites)
+                        {
+                            State->FavoritesHeight.Observe(bTop, Y, Generation);
+                        }
+                        else
+                        {
+                            State->ComponentHeights.FindOrAdd(Id).Observe(bTop, Y, Generation);
+                        }
+                    })
+            ];
+    }
+
+    // Static presentation only. These Slate widgets never read from components or property handles.
+    void AddFrozenRows(IDetailCategoryBuilder& Category,
+                       const TArray<SurfaceFrozenSnapshot::FRow>& Rows,
+                       const FText& SearchText,
+                       const TAttribute<EVisibility>& Visibility)
+    {
+        if (Rows.IsEmpty()) { return; }
+        TSharedRef<SVerticalBox> Column = SNew(SVerticalBox);
+        FString PreviousCategory;
+        for (const SurfaceFrozenSnapshot::FRow& Row : Rows)
+        {
+            if (!Row.Category.IsEmpty() && Row.Category != PreviousCategory)
+            {
+                PreviousCategory = Row.Category;
+                Column->AddSlot().AutoHeight().Padding(4.0f, 5.0f, 0.0f, 2.0f)
+                [ SNew(STextBlock).Text(FText::FromString(Row.Category))
+                  .Font(IDetailLayoutBuilder::GetDetailFontBold()) ];
+            }
+            Column->AddSlot().AutoHeight().Padding(5.0f, 2.0f)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot().FillWidth(0.45f)
+                [ SNew(STextBlock).Text(FText::FromString(Row.Name)) ]
+                + SHorizontalBox::Slot().FillWidth(0.55f)
+                [ SNew(STextBlock).Text(FText::FromString(Row.Value)) ]
+            ];
+        }
+        Category.AddCustomRow(SearchText)
+            .Visibility(Visibility)
+            .WholeRowContent()
+            [ SNew(SBox).IsEnabled(false)[ Column ] ];
+    }
+
     void AddSurfaceFavoriteRows(
         IDetailCategoryBuilder& FavoritesCategory,
         const Surface::FComponentGroup& ComponentGroup,
@@ -828,6 +892,10 @@ void FSurfaceCustomization::AddComponentDetails(
         PanelState->LastFavoritesRefreshRevision = FavoritesRevision;
     }
 
+    // One measurement generation per Details customization. Markers belonging
+    // to previous rows cannot update the current layout's geometry.
+    const uint64 HeightGeneration = ++PanelState->HeightLayoutGeneration;
+
     SurfacePanel::ConfigureCategory(FavoritesCategory, PanelState, true);
     SurfacePanel::ConfigureCategory(Category, PanelState, false);
 
@@ -857,6 +925,16 @@ void FSurfaceCustomization::AddComponentDetails(
                     return FReply::Handled();
                 })
         ];
+
+    // Measure from directly after the always-visible Refresh Favorites row,
+    // rather than beginning at the first external Favorite group. The space
+    // between those rows is part of the disappearing content too.
+    if (!bLightweightDuringMovement)
+    {
+        PanelState->FavoritesHeight.BeginLayout(HeightGeneration);
+        AddSectionHeightMarker(FavoritesCategory, PanelState, TEXT("Favorites"), true, true,
+            LOCTEXT("FavoritesHeightTop", "Surface Favorites height top"), HeightGeneration);
+    }
 
     // Preserve filters and expansion choices while refreshing the item list.
     PanelState->Items.Reset();
@@ -913,6 +991,8 @@ void FSurfaceCustomization::AddComponentDetails(
         GetDefault<UBlueprintEditorSettings>()->bHideConstructionScriptComponentsInDetailsView;
 
     int32 FavoriteCount = 0;
+    bool bStartedFavoritesMeasurement = false;
+    PanelState->FavoritesHeight.BeginLayout(HeightGeneration);
     int32 CaptureFailureCount = 0;
 
     for (const Surface::FComponentGroup& Group : Groups)
@@ -1093,35 +1173,34 @@ void FSurfaceCustomization::AddComponentDetails(
         if (bLightweightDuringMovement)
         {
             SurfaceProfiling::Record(SurfaceProfiling::EStage::MovementLayoutSuppressed, 0.0);
-            // We deliberately DO NOT retain stale live property handles/widgets.
-            // A lightweight reserved-height row avoids collapsing the entire
-            // expanded component section on every construction-script update.
             const USurfaceMovementSettings* MovementSettings = GetDefault<USurfaceMovementSettings>();
-            if (MovementSettings->bPreservePanelSpaceDuringMovement &&
-                PanelState->ExpandedComponents.Contains(ComponentId))
+            const bool bExpanded = PanelState->ExpandedComponents.Contains(ComponentId);
+            const TArray<SurfaceFrozenSnapshot::FRow>* Snapshot = PanelState->FrozenComponentRows.Find(ComponentId);
+            if (bExpanded && MovementSettings->bFrozenPropertyPreviewDuringMovement && Snapshot && !Snapshot->IsEmpty())
             {
-                const float ReservedHeight = FMath::Clamp(MovementSettings->FrozenComponentHeight, 48.0f, 2000.0f);
-                Category.AddCustomRow(LOCTEXT("FrozenComponentDetails", "Frozen component details"))
-                    .Visibility(TAttribute<EVisibility>::CreateLambda(
-                        [PanelState, ComponentId, ComponentLabel]()
+                AddFrozenRows(Category, *Snapshot, ComponentLabel,
+                    TAttribute<EVisibility>::CreateLambda([PanelState, ComponentId, ComponentLabel]()
+                    {
+                        return PanelState->ExpandedComponents.Contains(ComponentId) &&
+                            PanelState->PassesFilter(ComponentId, ComponentLabel)
+                            ? EVisibility::Visible : EVisibility::Collapsed;
+                    }));
+            }
+            else if (bExpanded && MovementSettings->bPreservePanelSpaceDuringMovement)
+            {
+                const float ReservedHeight = PanelState->GetComponentHeight(ComponentId);
+                if (ReservedHeight > 0.0f)
+                {
+                    Category.AddCustomRow(LOCTEXT("FrozenComponentDetails", "Frozen component details"))
+                        .Visibility(TAttribute<EVisibility>::CreateLambda([PanelState, ComponentId, ComponentLabel]()
                         {
                             return PanelState->ExpandedComponents.Contains(ComponentId) &&
                                 PanelState->PassesFilter(ComponentId, ComponentLabel)
                                 ? EVisibility::Visible : EVisibility::Collapsed;
                         }))
-                    .WholeRowContent()
-                    [
-                        SNew(SBox)
-                            .HeightOverride(ReservedHeight)
-                            .Padding(FMargin(12.0f, 8.0f))
-                            .HAlign(HAlign_Left)
-                            .VAlign(VAlign_Top)
-                            [
-                                SNew(STextBlock)
-                                    .Text(LOCTEXT("FrozenSurfaceNotice", "Component values paused during movement"))
-                                    .ColorAndOpacity(FSlateColor::UseSubduedForeground())
-                            ]
-                    ];
+                        .WholeRowContent()
+                        [ SNew(SBox).HeightOverride(ReservedHeight)[SNew(SBox)] ];
+                }
             }
             continue;
         }
@@ -1144,6 +1223,29 @@ void FSurfaceCustomization::AddComponentDetails(
         else
         {
             SurfaceProfiling::Record(SurfaceProfiling::EStage::CollapsedFavoriteLayout, 0.0);
+        }
+
+        const bool bMeasureExpanded = PanelState->ExpandedComponents.Contains(ComponentId) &&
+            PanelState->PassesFilter(ComponentId, ComponentLabel);
+        if (bMeasureExpanded)
+        {
+            PanelState->ComponentHeights.FindOrAdd(ComponentId).BeginLayout(HeightGeneration);
+            AddSectionHeightMarker(Category, PanelState, ComponentId, true, false, ComponentLabel, HeightGeneration);
+        }
+
+        // Copy display data before a later Construction Script reconstruction can
+        // invalidate the live component object. Multi-select never presents values
+        // from just the first selected component as though they were shared.
+        if (GetDefault<USurfaceMovementSettings>()->bFrozenPropertyPreviewDuringMovement &&
+            bMeasureExpanded && ExternalObjects.Num() == 1)
+        {
+            SurfaceFrozenSnapshot::CaptureComponent(
+                Cast<UActorComponent>(ExternalObjects[0]),
+                PanelState->FrozenComponentRows.FindOrAdd(ComponentId));
+        }
+        else if (ExternalObjects.Num() != 1)
+        {
+            PanelState->FrozenComponentRows.Remove(ComponentId);
         }
 
         FAddPropertyParams Params;
@@ -1183,6 +1285,11 @@ void FSurfaceCustomization::AddComponentDetails(
                     EPropertyLocation::Default,
                     Params);
             }
+        }
+
+        if (bMeasureExpanded && PropertyRow != nullptr)
+        {
+            AddSectionHeightMarker(Category, PanelState, ComponentId, false, false, ComponentLabel, HeightGeneration);
         }
 
         if (PropertyRow == nullptr)
@@ -1237,6 +1344,20 @@ void FSurfaceCustomization::AddComponentDetails(
 
         // These rows deliberately have no Surface filter or expansion binding.
         // They remain available when the main component section is hidden.
+        if (!Capture->Properties.IsEmpty())
+        {
+            bStartedFavoritesMeasurement = true;
+        }
+        if (GetDefault<USurfaceMovementSettings>()->bFrozenPropertyPreviewDuringMovement)
+        {
+            TArray<SurfaceFrozenSnapshot::FRow>& FrozenFavorites =
+                PanelState->FrozenFavoriteRows.FindOrAdd(ComponentId);
+            FrozenFavorites.Reset();
+            for (const TSharedRef<IPropertyHandle>& Favorite : Capture->Properties)
+            {
+                SurfaceFrozenSnapshot::CaptureFavorite(Favorite, FrozenFavorites);
+            }
+        }
         AddSurfaceFavoriteRows(
             FavoritesCategory,
             Group,
@@ -1245,15 +1366,50 @@ void FSurfaceCustomization::AddComponentDetails(
         FavoriteCount += Capture->Properties.Num();
     }
 
+    // If an authoritative scan found no Favorites, discard the previous
+    // geometry so removed favorites never reserve stale blank space.
+    if (!bLightweightDuringMovement && FavoriteCount == 0 && CaptureFailureCount == 0)
+    {
+        PanelState->FavoritesHeight = SurfacePanel::FState::FMeasuredSection();
+    }
+
+    if (bStartedFavoritesMeasurement)
+    {
+        AddSectionHeightMarker(FavoritesCategory, PanelState, TEXT("Favorites"), false, true,
+            LOCTEXT("FavoritesHeightBottom", "Surface Favorites height bottom"), HeightGeneration);
+    }
+
     if (bLightweightDuringMovement)
     {
-        FavoritesCategory.AddCustomRow(LOCTEXT("MovingFavoritesSuspended", "Favorites paused while moving"))
-            .WholeRowContent()[
-                SNew(STextBlock)
-                    .Text(LOCTEXT("SurfaceMovingFavoritesNotice", "Favorites refresh when actor movement ends."))
-                    .ColorAndOpacity(FSlateColor::UseSubduedForeground())
-            ];
-
+        const USurfaceMovementSettings* MovementSettings = GetDefault<USurfaceMovementSettings>();
+        if (PanelState->bFavoritesExpanded)
+        {
+            bool bDisplayedSnapshot = false;
+            if (MovementSettings->bFrozenPropertyPreviewDuringMovement)
+            {
+                for (const Surface::FComponentGroup& Group : Groups)
+                {
+                    const TArray<SurfaceFrozenSnapshot::FRow>* Rows =
+                        PanelState->FrozenFavoriteRows.Find(Group.StableId);
+                    if (!Rows || Rows->IsEmpty()) { continue; }
+                    bDisplayedSnapshot = true;
+                    FavoritesCategory.AddCustomRow(Group.Label).WholeRowContent()
+                    [ SNew(STextBlock).Text(Group.Label)
+                        .Font(IDetailLayoutBuilder::GetDetailFontBold()) ];
+                    AddFrozenRows(FavoritesCategory, *Rows, Group.Label, EVisibility::Visible);
+                }
+            }
+            if (!bDisplayedSnapshot && MovementSettings->bPreservePanelSpaceDuringMovement)
+            {
+                const float ReservedHeight = PanelState->GetFavoritesHeight();
+                if (ReservedHeight > 0.0f)
+                {
+                    FavoritesCategory.AddCustomRow(LOCTEXT("FrozenFavoriteDetails", "Frozen Favorites"))
+                        .WholeRowContent()
+                        [ SNew(SBox).HeightOverride(ReservedHeight)[SNew(SBox)] ];
+                }
+            }
+        }
     }
 
     // Record defaults once after discovering the complete list, not once per component.

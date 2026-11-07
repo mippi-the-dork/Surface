@@ -1190,3 +1190,8 @@ Surface turns the Actor Details panel into a more complete view of the thing you
 ### Surface 2.0 Alpha 4 profiling
 
 Run `Surface.Profile.Start`, drag an Actor, and run `Surface.Profile.Stop`. New diagnostic stages: `MovementBegin`, `MovementEnd`, `CustomizeDuringMovement`, `ExternalLayoutDuringMovement`, `ComponentInstanceReplaced`, and `ComponentInstanceUnchanged`. These counters introduce no change to native Details refresh behavior.
+
+
+### Surface 2.0 Alpha 10 evaluation
+
+Alpha 10 maintains lightweight layout suppression while moving an Actor. Experimental frozen text previews and measured blank placeholders are disabled by default because they did not reproduce native Details appearance. See `NATIVE_FREEZE_FEASIBILITY.md` for the source-backed limitations and next prototype criteria.

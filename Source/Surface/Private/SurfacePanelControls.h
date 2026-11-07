@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreGlobals.h"
+#include "SurfaceFrozenSnapshot.h"
 #include "Containers/Array.h"
 #include "Containers/Set.h"
 #include "Containers/UnrealString.h"
@@ -50,6 +51,10 @@ namespace SurfacePanel
     {
         TArray<TWeakObjectPtr<AActor>> Actors;
         TArray<FComponentItem> Items;
+        // Copied presentation data only; no UObject pointers or property handles.
+        TMap<FString, TArray<SurfaceFrozenSnapshot::FRow>> FrozenComponentRows;
+        TMap<FString, TArray<SurfaceFrozenSnapshot::FRow>> FrozenFavoriteRows;
+
 
         FString ConfigSection;
         TSet<FString> KnownComponents;
@@ -74,6 +79,49 @@ namespace SurfacePanel
         };
         TMap<FString, FFavoritePresence> FavoritePresence;
         uint64 LastFavoritesRefreshRevision = 0;
+
+        // Slate-only geometry cache. Heights are display units, not property
+        // values or live widget references. Kept per Details view + selection.
+        struct FMeasuredSection
+        {
+            float Top = 0.0f;
+            float Bottom = 0.0f;
+            float Height = 0.0f;
+            uint64 LayoutGeneration = 0;
+            bool bTopValid = false;
+            bool bBottomValid = false;
+
+            void BeginLayout(uint64 Generation)
+            {
+                // Keep the last *completed* measurement for a drag, but
+                // never combine a new top with the previous layout's bottom.
+                if (LayoutGeneration == Generation) { return; }
+                LayoutGeneration = Generation;
+                bTopValid = false;
+                bBottomValid = false;
+            }
+
+            void Observe(bool bTop, float Position, uint64 Generation)
+            {
+                if (!FMath::IsFinite(Position) || Generation != LayoutGeneration) { return; }
+                if (bTop) { Top = Position; bTopValid = true; }
+                else { Bottom = Position; bBottomValid = true; }
+                if (bTopValid && bBottomValid && Bottom > Top)
+                {
+                    const float Value = Bottom - Top;
+                    if (Value >= 1.0f && Value <= 20000.0f) { Height = Value; }
+                }
+            }
+        };
+        uint64 HeightLayoutGeneration = 0;
+        TMap<FString, FMeasuredSection> ComponentHeights;
+        FMeasuredSection FavoritesHeight;
+        float GetComponentHeight(const FString& Id) const
+        {
+            const FMeasuredSection* Section = ComponentHeights.Find(Id);
+            return Section ? Section->Height : 0.0f;
+        }
+        float GetFavoritesHeight() const { return FavoritesHeight.Height; }
 
         bool NeedsExternalLayout(const FString& Id, const UClass* Class) const
         {
