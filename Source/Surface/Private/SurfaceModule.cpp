@@ -6,6 +6,7 @@
 #include "SurfaceProfiling.h"
 #include "SurfaceMovementPolicy.h"
 #include "Editor.h"
+#include "Containers/Ticker.h"
 #include "Editor/EditorEngine.h"
 
 #include "Components/ActorComponent.h"
@@ -105,6 +106,11 @@ void FSurfaceModule::StartupModule()
 
     PropertyEditor.NotifyCustomizationModuleChanged();
 
+    // Check lightweight native Favorites metadata changes once per second.
+    // No object property trees are built by this ticker.
+    FavoritesTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+        FTickerDelegate::CreateStatic(&SurfaceMovementPolicy::PollFavoritesMetadata), 1.0f);
+
     if (GEditor != nullptr)
     {
         BeginMovementHandle = GEditor->OnBeginObjectMovement().AddLambda([](UObject& Object) { SurfaceProfiling::BeginObjectMovement(Object); SurfaceMovementPolicy::BeginObjectMovement(Object); });
@@ -114,6 +120,11 @@ void FSurfaceModule::StartupModule()
 
 void FSurfaceModule::ShutdownModule()
 {
+    if (FavoritesTickerHandle.IsValid())
+    {
+        FTSTicker::GetCoreTicker().RemoveTicker(FavoritesTickerHandle);
+        FavoritesTickerHandle.Reset();
+    }
     if (GEditor != nullptr)
     {
         if (BeginMovementHandle.IsValid()) { GEditor->OnBeginObjectMovement().Remove(BeginMovementHandle); }

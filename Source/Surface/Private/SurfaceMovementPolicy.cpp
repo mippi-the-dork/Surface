@@ -4,6 +4,9 @@
 #include "Components/ActorComponent.h"
 #include "GameFramework/Actor.h"
 #include "IPropertyUtilities.h"
+#include "Editor.h"
+#include "Editor/EditorEngine.h"
+#include "EditorMetadataOverrides.h"
 
 namespace SurfaceMovementPolicy
 {
@@ -13,6 +16,40 @@ namespace SurfaceMovementPolicy
         TSet<TWeakObjectPtr<AActor>> MovingActors;
         uint64 FavoritesRefreshRevision = 0;
         TMap<TWeakObjectPtr<AActor>, TWeakPtr<IPropertyUtilities>> DetailsUtilities;
+        // Metadata is a list of paths, not a live property handle. A class-wide
+        // snapshot detects favorites changed in other Details views.
+        TMap<TWeakObjectPtr<UClass>, TArray<FString>> FavoritesMetadata;
+
+        bool ReadFavorites(UClass* Class, TArray<FString>& OutPaths)
+        {
+            OutPaths.Reset();
+            if (!Class || !GEditor) { return false; }
+            UEditorMetadataOverrides* Overrides = GEditor->GetEditorSubsystem<UEditorMetadataOverrides>();
+            if (!Overrides) { return false; }
+            Overrides->GetArrayMetadata(Class, FName(TEXT("FavoriteProperties")), OutPaths);
+            OutPaths.Sort();
+            return true;
+        }
+
+        void ObserveClasses(AActor* Actor)
+        {
+            if (!IsValid(Actor)) { return; }
+            TInlineComponentArray<UActorComponent*> Components;
+            Actor->GetComponents(Components);
+            for (UActorComponent* Component : Components)
+            {
+                if (!IsValid(Component)) { continue; }
+                UClass* Class = Component->GetClass();
+                if (!FavoritesMetadata.Contains(Class))
+                {
+                    TArray<FString> Paths;
+                    if (ReadFavorites(Class, Paths))
+                    {
+                        FavoritesMetadata.Add(Class, MoveTemp(Paths));
+                    }
+                }
+            }
+        }
 
         AActor* GetActor(UObject& Object)
         {
@@ -54,7 +91,7 @@ namespace SurfaceMovementPolicy
         if (!Utilities.IsValid()) { return; }
         for (AActor* Actor : Actors)
         {
-            if (IsValid(Actor)) { DetailsUtilities.Add(Actor, Utilities); }
+            if (IsValid(Actor)) { DetailsUtilities.Add(Actor, Utilities); ObserveClasses(Actor); }
         }
         // Bound memory growth for long sessions with many different selections.
         for (auto It = DetailsUtilities.CreateIterator(); It; ++It)
@@ -84,9 +121,53 @@ namespace SurfaceMovementPolicy
             Refresh(Actor);
         }
     }
+    bool PollFavoritesMetadata(float DeltaTime)
+    {
+        // The poll is intentionally cheap: one metadata read per observed class,
+        // without asking PropertyEditor to build or walk a single property row.
+        TSet<UClass*> ChangedClasses;
+        for (auto It = FavoritesMetadata.CreateIterator(); It; ++It)
+        {
+            UClass* Class = It.Key().Get();
+            if (!IsValid(Class)) { It.RemoveCurrent(); continue; }
+            TArray<FString> Current;
+            if (ReadFavorites(Class, Current) && Current != It.Value())
+            {
+                It.Value() = MoveTemp(Current);
+                ChangedClasses.Add(Class);
+            }
+        }
+        if (ChangedClasses.IsEmpty()) { return true; }
+        ++FavoritesRefreshRevision;
+
+        for (auto It = DetailsUtilities.CreateIterator(); It; ++It)
+        {
+            AActor* Actor = It.Key().Get();
+            if (!IsValid(Actor) || !It.Value().IsValid())
+            {
+                It.RemoveCurrent();
+                continue;
+            }
+            // Never rebuild Surface's external rows in the middle of a drag.
+            // EndObjectMovement already schedules a safe refresh afterward.
+            if (MovingActors.Contains(Actor)) { continue; }
+            TInlineComponentArray<UActorComponent*> Components;
+            Actor->GetComponents(Components);
+            for (UActorComponent* Component : Components)
+            {
+                if (IsValid(Component) && ChangedClasses.Contains(Component->GetClass()))
+                {
+                    Refresh(Actor);
+                    break;
+                }
+            }
+        }
+        return true;
+    }
     void Reset()
     {
         MovingActors.Reset();
         DetailsUtilities.Reset();
+        FavoritesMetadata.Reset();
     }
 }

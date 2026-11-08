@@ -27,7 +27,8 @@ public class Surface : ModuleRules
             "DetailCustomizations",
             "UnrealEd",
             "BlueprintGraph",
-            "DeveloperSettings"
+            "DeveloperSettings",
+            "EditorConfig"
         });
     }
 }

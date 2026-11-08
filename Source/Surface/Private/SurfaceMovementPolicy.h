@@ -16,5 +16,7 @@ namespace SurfaceMovementPolicy
     void ObserveDetails(const TArray<AActor*>& Actors, const TWeakPtr<IPropertyUtilities>& Utilities);
     void BeginObjectMovement(UObject& Object);
     void EndObjectMovement(UObject& Object);
+    // Poll native FavoriteProperties class metadata; no property layout generation.
+    bool PollFavoritesMetadata(float DeltaTime);
     void Reset();
 }

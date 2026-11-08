@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Containers/Array.h"
+#include "Containers/Ticker.h"
 #include "Delegates/Delegate.h"
 #include "Misc/Optional.h"
 #include "Modules/ModuleInterface.h"
@@ -37,4 +38,5 @@ private:
     TArray<FLayoutRegistration> Registrations;
     FDelegateHandle BeginMovementHandle;
     FDelegateHandle EndMovementHandle;
+    FTSTicker::FDelegateHandle FavoritesTickerHandle;
 };
