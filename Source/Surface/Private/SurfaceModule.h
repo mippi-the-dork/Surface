@@ -39,4 +39,5 @@ private:
     FDelegateHandle BeginMovementHandle;
     FDelegateHandle EndMovementHandle;
     FTSTicker::FDelegateHandle FavoritesTickerHandle;
+    FTSTicker::FDelegateHandle ScrollAnchorTickerHandle;
 };

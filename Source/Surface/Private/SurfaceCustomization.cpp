@@ -31,6 +31,7 @@
 #include "Input/Reply.h"
 #include "Internationalization/Text.h"
 #include "IPropertyUtilities.h"
+#include "IDetailsView.h"
 #include "Kismet2/ComponentEditorUtils.h"
 #include "Logging/LogMacros.h"
 #include "Misc/Attribute.h"
@@ -903,6 +904,7 @@ void FSurfaceCustomization::AddComponentDetails(
         DetailBuilder.GetPropertyUtilities();
 
     SurfaceMovementPolicy::ObserveDetails(Actors, WeakUtilities);
+    SurfaceMovementPolicy::ObserveView(Actors, DetailBuilder.GetDetailsViewSharedPtr());
     const bool bLightweightDuringMovement = SurfaceMovementPolicy::IsLightweightForSelection(Actors);
 
     // Changes to native favorites made in a different Details view cannot
@@ -1186,7 +1188,7 @@ void FSurfaceCustomization::AddComponentDetails(
                             ? EVisibility::Visible : EVisibility::Collapsed;
                     }));
             }
-            else if (bExpanded && MovementSettings->bPreservePanelSpaceDuringMovement)
+            else if (bExpanded && (MovementSettings->bPreservePanelSpaceDuringMovement || SurfaceMovementPolicy::ShouldPreserveSpaceForSelection(Actors)))
             {
                 const float ReservedHeight = PanelState->GetComponentHeight(ComponentId);
                 if (ReservedHeight > 0.0f)
@@ -1399,7 +1401,7 @@ void FSurfaceCustomization::AddComponentDetails(
                     AddFrozenRows(FavoritesCategory, *Rows, Group.Label, EVisibility::Visible);
                 }
             }
-            if (!bDisplayedSnapshot && MovementSettings->bPreservePanelSpaceDuringMovement)
+            if (!bDisplayedSnapshot && (MovementSettings->bPreservePanelSpaceDuringMovement || SurfaceMovementPolicy::ShouldPreserveSpaceForSelection(Actors)))
             {
                 const float ReservedHeight = PanelState->GetFavoritesHeight();
                 if (ReservedHeight > 0.0f)

@@ -1,6 +1,12 @@
 // Copyright Mippithedork 2026, Inc. All Rights Reserved.
 #include "SurfaceMovementPolicy.h"
 #include "SurfaceMovementSettings.h"
+#include "SurfaceScrollAnchor.h"
+#include "IDetailsView.h"
+#include "Widgets/Views/STableViewBase.h"
+#include "Logging/LogMacros.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogSurfaceScrollAnchor, Log, All);
 #include "Components/ActorComponent.h"
 #include "GameFramework/Actor.h"
 #include "IPropertyUtilities.h"
@@ -16,6 +22,68 @@ namespace SurfaceMovementPolicy
         TSet<TWeakObjectPtr<AActor>> MovingActors;
         uint64 FavoritesRefreshRevision = 0;
         TMap<TWeakObjectPtr<AActor>, TWeakPtr<IPropertyUtilities>> DetailsUtilities;
+        TMap<TWeakObjectPtr<AActor>, TWeakPtr<IDetailsView>> DetailsViews;
+        struct FScrollSession
+        {
+            TWeakPtr<IDetailsView> View;
+            TWeakPtr<STableViewBase> Table;
+            SurfaceScrollAnchor::FRowAnchor Anchor;
+            SurfaceScrollAnchor::FRestoreStability RestoreState;
+            bool bDuringMovement = true;
+            bool bNeedsSurfaceGeometry = false;
+            float LastAppliedOffset = -1.0f;
+        };
+        TMap<TWeakObjectPtr<AActor>, FScrollSession> ScrollSessions;
+        float ScrollCheckAccumulation = 0.0f;
+
+        bool IsObservedSelection(const TSharedPtr<IDetailsView>& View, AActor* Actor)
+        {
+            if (!View.IsValid() || !IsValid(Actor)) { return false; }
+            for (const TWeakObjectPtr<AActor>& Selected : View->GetSelectedActors())
+            {
+                if (Selected.Get() == Actor) { return true; }
+            }
+            return false;
+        }
+
+        void CaptureScroll(AActor* Actor)
+        {
+            if (!Actor || ScrollSessions.Contains(Actor)) { return; }
+            const TWeakPtr<IDetailsView>* WeakView = DetailsViews.Find(Actor);
+            TSharedPtr<IDetailsView> View = WeakView ? WeakView->Pin() : nullptr;
+            if (!IsObservedSelection(View, Actor)) { return; }
+            TSharedPtr<STableViewBase> Table = SurfaceScrollAnchor::FindDetailsTable(View).Pin();
+            if (!Table.IsValid())
+            {
+                UE_LOG(LogSurfaceScrollAnchor, Verbose, TEXT("Scroll anchor unavailable: native Details table not found."));
+                return;
+            }
+            const TArray<SurfaceScrollAnchor::FNamedRow> Rows = SurfaceScrollAnchor::GetNamedRows(View);
+            const float OriginalScroll = Table->GetScrollOffset();
+            const SurfaceScrollAnchor::FRowAnchor Anchor = SurfaceScrollAnchor::CaptureRow(
+                Rows, OriginalScroll);
+            // Actor properties are not necessarily present in the visible
+            // region when the user is scrolled into Surface's external rows.
+            // In that case prefer measured space over discarding the session.
+            bool bNearAnchor = false;
+            for (const SurfaceScrollAnchor::FNamedRow& Row : Rows)
+            {
+                if (Row.Path == Anchor.PropertyPath)
+                {
+                    bNearAnchor = Row.Index <= OriginalScroll + 3.0f;
+                    break;
+                }
+            }
+            FScrollSession& Session = ScrollSessions.Add(Actor);
+            Session.View = View;
+            Session.Table = Table;
+            Session.Anchor = Anchor;
+            Session.bNeedsSurfaceGeometry = !bNearAnchor;
+            UE_LOG(LogSurfaceScrollAnchor, Verbose,
+                TEXT("Captured scroll anchor %s (row offset %.2f, measured geometry fallback %s)"),
+                *Anchor.PropertyPath, Anchor.OffsetWithinFirstRow,
+                Session.bNeedsSurfaceGeometry ? TEXT("on") : TEXT("off"));
+        }
         // Metadata is a list of paths, not a live property handle. A class-wide
         // snapshot detects favorites changed in other Details views.
         TMap<TWeakObjectPtr<UClass>, TArray<FString>> FavoritesMetadata;
@@ -76,6 +144,20 @@ namespace SurfaceMovementPolicy
         return bIsSelectedActorMoving && bOptimizationEnabled;
     }
     uint64 GetFavoritesRefreshRevision() { return FavoritesRefreshRevision; }
+    bool ShouldPreserveSpaceForSelection(const TArray<AActor*>& Actors)
+    {
+        for (AActor* Actor : Actors)
+        {
+            if (Actor && MovingActors.Contains(Actor))
+            {
+                if (const FScrollSession* Session = ScrollSessions.Find(Actor))
+                {
+                    if (Session->bNeedsSurfaceGeometry) { return true; }
+                }
+            }
+        }
+        return false;
+    }
     bool IsLightweightForSelection(const TArray<AActor*>& Actors)
     {
         const bool bEnabled = GetDefault<USurfaceMovementSettings>()->bLightweightDuringMovement;
@@ -99,12 +181,94 @@ namespace SurfaceMovementPolicy
             if (!It.Key().IsValid() || !It.Value().IsValid()) { It.RemoveCurrent(); }
         }
     }
+    void ObserveView(const TArray<AActor*>& Actors, const TWeakPtr<IDetailsView>& View)
+    {
+        if (!View.IsValid()) { return; }
+        for (AActor* Actor : Actors)
+        {
+            if (IsValid(Actor)) { DetailsViews.Add(Actor, View); }
+        }
+        for (auto It = DetailsViews.CreateIterator(); It; ++It)
+        {
+            if (!It.Key().IsValid() || !It.Value().IsValid()) { It.RemoveCurrent(); }
+        }
+    }
+
+    bool RestoreScrollAnchors(float DeltaTime)
+    {
+        // Details' STreeView is virtualized, so defer until after its rows
+        // have been rebuilt. Avoid expensive row discovery every Slate tick.
+        if (ScrollSessions.IsEmpty()) { return true; }
+        ScrollCheckAccumulation += DeltaTime;
+        if (ScrollCheckAccumulation < 0.05f) { return true; }
+        ScrollCheckAccumulation = 0.0f;
+        for (auto It = ScrollSessions.CreateIterator(); It; ++It)
+        {
+            AActor* Actor = It.Key().Get();
+            FScrollSession& Session = It.Value();
+            TSharedPtr<IDetailsView> View = Session.View.Pin();
+            TSharedPtr<STableViewBase> Table = Session.Table.Pin();
+            if (!IsObservedSelection(View, Actor) || !Table.IsValid())
+            {
+                It.RemoveCurrent();
+                continue;
+            }
+            const TArray<SurfaceScrollAnchor::FNamedRow> Rows = SurfaceScrollAnchor::GetNamedRows(View);
+            const TOptional<float> Target = SurfaceScrollAnchor::ResolveOffset(Session.Anchor, Rows);
+            // Hash the complete actor row mapping, not just its count: changes
+            // elsewhere in the Details layout invalidate a previously stable
+            // scroll position.
+            uint32 LayoutHash = GetTypeHash(Rows.Num());
+            for (const SurfaceScrollAnchor::FNamedRow& Row : Rows)
+            {
+                LayoutHash = HashCombineFast(LayoutHash, HashCombineFast(GetTypeHash(Row.Index), GetTypeHash(Row.Path)));
+            }
+            if (Session.bDuringMovement)
+            {
+                if (Target.IsSet() && FMath::Abs(Table->GetScrollOffset() - Target.GetValue()) > 0.1f)
+                {
+                    Table->SetScrollOffset(Target.GetValue());
+                    Session.LastAppliedOffset = Target.GetValue();
+                }
+                continue;
+            }
+
+            Session.RestoreState.Observe(LayoutHash, Target.IsSet(), 0.05f);
+            if (Target.IsSet())
+            {
+                const float CurrentOffset = Table->GetScrollOffset();
+                if (FMath::Abs(CurrentOffset - Target.GetValue()) > 0.1f)
+                {
+                    // Once the native layout has already stabilized, avoid
+                    // fighting a user's subsequent manual scroll gesture.
+                    if (Session.RestoreState.UnchangedSeconds > 0.45f &&
+                        Session.RestoreState.SuccessfulRestores > 0 &&
+                        Session.LastAppliedOffset >= 0.0f &&
+                        FMath::Abs(CurrentOffset - Session.LastAppliedOffset) > 0.5f)
+                    {
+                        It.RemoveCurrent();
+                        continue;
+                    }
+                    Table->SetScrollOffset(Target.GetValue());
+                    Session.LastAppliedOffset = Target.GetValue();
+                }
+                ++Session.RestoreState.SuccessfulRestores;
+            }
+            if (Session.RestoreState.IsSettled() || Session.RestoreState.HasTimedOut())
+            {
+                It.RemoveCurrent();
+            }
+        }
+        return true;
+    }
+
     void BeginObjectMovement(UObject& Object)
     {
         AActor* Actor = GetActor(Object);
         if (!IsValid(Actor)) { return; }
         if (!MovingActors.Contains(Actor))
         {
+            CaptureScroll(Actor);
             MovingActors.Add(Actor);
             if (GetDefault<USurfaceMovementSettings>()->bLightweightDuringMovement) { Refresh(Actor); }
         }
@@ -117,6 +281,11 @@ namespace SurfaceMovementPolicy
         {
             // Invalidate session-only negative Favorites information after reconstruction.
             ++FavoritesRefreshRevision;
+            if (FScrollSession* Session = ScrollSessions.Find(Actor))
+            {
+                Session->bDuringMovement = false;
+                Session->RestoreState = SurfaceScrollAnchor::FRestoreStability();
+            }
             // Rebuild with new UObject instances, never reuse pre-reconstruction handles.
             Refresh(Actor);
         }
@@ -168,6 +337,8 @@ namespace SurfaceMovementPolicy
     {
         MovingActors.Reset();
         DetailsUtilities.Reset();
+        DetailsViews.Reset();
+        ScrollSessions.Reset();
         FavoritesMetadata.Reset();
     }
 }

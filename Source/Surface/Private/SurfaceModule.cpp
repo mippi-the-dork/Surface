@@ -110,6 +110,8 @@ void FSurfaceModule::StartupModule()
     // No object property trees are built by this ticker.
     FavoritesTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
         FTickerDelegate::CreateStatic(&SurfaceMovementPolicy::PollFavoritesMetadata), 1.0f);
+    ScrollAnchorTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+        FTickerDelegate::CreateStatic(&SurfaceMovementPolicy::RestoreScrollAnchors), 0.05f);
 
     if (GEditor != nullptr)
     {
@@ -120,6 +122,11 @@ void FSurfaceModule::StartupModule()
 
 void FSurfaceModule::ShutdownModule()
 {
+    if (ScrollAnchorTickerHandle.IsValid())
+    {
+        FTSTicker::GetCoreTicker().RemoveTicker(ScrollAnchorTickerHandle);
+        ScrollAnchorTickerHandle.Reset();
+    }
     if (FavoritesTickerHandle.IsValid())
     {
         FTSTicker::GetCoreTicker().RemoveTicker(FavoritesTickerHandle);
