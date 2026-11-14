@@ -12,8 +12,8 @@ namespace SurfaceMovementPolicy
     // Pure decision point so the safety policy is testable without an editor viewport.
     bool ShouldSkipExternalLayout(bool bIsSelectedActorMoving, bool bOptimizationEnabled);
     bool IsLightweightForSelection(const TArray<AActor*>& Actors);
-    // Preserve measured geometry when the visible viewport cannot be anchored to
-    // an actor property (typically when viewing an expanded Surface section).
+    // Preserve measured geometry during any anchored movement: expanded Surface
+    // sections may be above the viewport and must not collapse the rows below.
     bool ShouldPreserveSpaceForSelection(const TArray<AActor*>& Actors);
     // Incremented after any actor movement ends, so cached negative Favorites are rescanned.
     uint64 GetFavoritesRefreshRevision();

@@ -62,25 +62,17 @@ namespace SurfaceMovementPolicy
             const float OriginalScroll = Table->GetScrollOffset();
             const SurfaceScrollAnchor::FRowAnchor Anchor = SurfaceScrollAnchor::CaptureRow(
                 Rows, OriginalScroll);
-            // Actor properties are not necessarily present in the visible
-            // region when the user is scrolled into Surface's external rows.
-            // In that case prefer measured space over discarding the session.
-            bool bNearAnchor = false;
-            for (const SurfaceScrollAnchor::FNamedRow& Row : Rows)
-            {
-                if (Row.Path == Anchor.PropertyPath)
-                {
-                    bNearAnchor = Row.Index <= OriginalScroll + 3.0f;
-                    break;
-                }
-            }
+            // All expanded Surface rows may change height even when scrolled
+            // completely offscreen. Preserve their last known measured height
+            // throughout the drag, not just when the viewport intersects them.
+            // This avoids removing space above a valid Actor-property anchor.
             FScrollSession& Session = ScrollSessions.Add(Actor);
             Session.View = View;
             Session.Table = Table;
             Session.Anchor = Anchor;
-            Session.bNeedsSurfaceGeometry = !bNearAnchor;
+            Session.bNeedsSurfaceGeometry = true;
             UE_LOG(LogSurfaceScrollAnchor, Verbose,
-                TEXT("Captured scroll anchor %s (row offset %.2f, measured geometry fallback %s)"),
+                TEXT("Captured scroll anchor %s (row relative %.2f, preserve available geometry: %s)"),
                 *Anchor.PropertyPath, Anchor.OffsetWithinFirstRow,
                 Session.bNeedsSurfaceGeometry ? TEXT("on") : TEXT("off"));
         }
@@ -207,12 +199,28 @@ namespace SurfaceMovementPolicy
             AActor* Actor = It.Key().Get();
             FScrollSession& Session = It.Value();
             TSharedPtr<IDetailsView> View = Session.View.Pin();
-            TSharedPtr<STableViewBase> Table = Session.Table.Pin();
-            if (!IsObservedSelection(View, Actor) || !Table.IsValid())
+            if (!IsObservedSelection(View, Actor))
             {
                 It.RemoveCurrent();
                 continue;
             }
+            // PropertyEditor can replace its internal STreeView while rebuilding
+            // the Details layout. A surviving Details view does not guarantee
+            // that the original Slate table survived the reconstruction.
+            TSharedPtr<STableViewBase> Table = SurfaceScrollAnchor::FindDetailsTable(View).Pin();
+            if (!Table.IsValid())
+            {
+                // A temporary missing table is not a reason to restore to an
+                // unrelated view. Allow the bounded post-release recovery to
+                // retry once Slate has rebuilt the tree.
+                if (!Session.bDuringMovement)
+                {
+                    Session.RestoreState.Observe(0, false, 0.05f);
+                    if (Session.RestoreState.HasTimedOut()) { It.RemoveCurrent(); }
+                }
+                continue;
+            }
+            Session.Table = Table;
             const TArray<SurfaceScrollAnchor::FNamedRow> Rows = SurfaceScrollAnchor::GetNamedRows(View);
             const TOptional<float> Target = SurfaceScrollAnchor::ResolveOffset(Session.Anchor, Rows);
             // Hash the complete actor row mapping, not just its count: changes
@@ -237,6 +245,11 @@ namespace SurfaceMovementPolicy
             if (Target.IsSet())
             {
                 const float CurrentOffset = Table->GetScrollOffset();
+                // Evaluate the actual offset BEFORE requesting correction.
+                // On a virtualized table the scroll request can be deferred or
+                // clamped. Never mark a session settled merely for requesting it.
+                Session.RestoreState.ObserveAlignment(
+                    FMath::Abs(CurrentOffset - Target.GetValue()) <= 0.1f);
                 if (FMath::Abs(CurrentOffset - Target.GetValue()) > 0.1f)
                 {
                     // Once the native layout has already stabilized, avoid

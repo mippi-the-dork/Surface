@@ -19,6 +19,38 @@ bool FSurfaceAnchorRowTest::RunTest(const FString& Parameters)
     if (Adjusted.IsSet()) { TestTrue(TEXT("Same offset relative to property"), FMath::IsNearlyEqual(Adjusted.GetValue(), 6.5f)); }
     TestFalse(TEXT("Missing property does not force unrelated scrolling"),
         ResolveOffset(Anchor, TArray<FNamedRow>{ {3, TEXT("OtherActor.Property")} }).IsSet());
+    // Above / inside / below Surface: the closest stable Actor property can
+    // precede the viewport. Older code only searched forward, causing a
+    // distant unrelated anchor to be selected below expanded components.
+    const TArray<FNamedRow> Below = {
+        { 7, TEXT("Actor.BeforeSurface") },
+        { 110, TEXT("Actor.AfterSurface") },
+        { 125, TEXT("Actor.FurtherDown") }
+    };
+    const FRowAnchor BelowAnchor = CaptureRow(Below, 116.25f);
+    TestEqual(TEXT("Below Surface chooses nearest actor property"),
+        BelowAnchor.PropertyPath, FString(TEXT("Actor.AfterSurface")));
+    TestTrue(TEXT("Below Surface remembers negative row offset"),
+        FMath::IsNearlyEqual(BelowAnchor.OffsetWithinFirstRow, -6.25f));
+    const TArray<FNamedRow> DuringBelow = {
+        { 7, TEXT("Actor.BeforeSurface") },
+        { 25, TEXT("Actor.AfterSurface") },
+        { 40, TEXT("Actor.FurtherDown") }
+    };
+    const TOptional<float> RestoredBelow = ResolveOffset(BelowAnchor, DuringBelow);
+    TestTrue(TEXT("Below Surface anchor resolves after native layout reduction"), RestoredBelow.IsSet());
+    if (RestoredBelow.IsSet())
+    {
+        TestTrue(TEXT("Below Surface preserves the row-relative viewport position"),
+            FMath::IsNearlyEqual(RestoredBelow.GetValue(), 31.25f));
+    }
+    const TArray<FNamedRow> PreferBefore = {
+        { 90, TEXT("Actor.LastVisible") },
+        { 140, TEXT("Actor.NextFarAway") }
+    };
+    const FRowAnchor PreviousSide = CaptureRow(PreferBefore, 101.0f);
+    TestEqual(TEXT("When next Actor property is distant choose the preceding one"),
+        PreviousSide.PropertyPath, FString(TEXT("Actor.LastVisible")));
     return true;
 }
 #endif
@@ -36,16 +68,20 @@ bool FSurfaceAnchorRefreshStabilityTest::RunTest(const FString& Parameters)
     {
         Stability.Observe(123, true, 0.05f);
         ++Stability.SuccessfulRestores;
+        Stability.ObserveAlignment(true);
     }
     TestFalse(TEXT("Do not finish before recovery window"), Stability.IsSettled());
     Stability.Observe(456, true, 0.05f);
     TestFalse(TEXT("Late native row rebuild resets settlement"), Stability.IsSettled());
-    for (int32 Index = 0; Index < 10; ++Index)
+    for (int32 Index = 0; Index < 22; ++Index)
     {
         Stability.Observe(456, true, 0.05f);
         ++Stability.SuccessfulRestores;
+        Stability.ObserveAlignment(true);
     }
     TestTrue(TEXT("Stable post-refresh layout completes restoration"), Stability.IsSettled());
+    Stability.ObserveAlignment(false);
+    TestFalse(TEXT("Pending or clamped table scroll is not successful restoration"), Stability.IsSettled());
 
     FRestoreStability Missing;
     for (int32 Index = 0; Index < 20; ++Index) { Missing.Observe(0, false, 0.05f); }

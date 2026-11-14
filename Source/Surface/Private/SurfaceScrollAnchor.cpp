@@ -13,17 +13,32 @@ namespace SurfaceScrollAnchor
     FRowAnchor CaptureRow(const TArray<FNamedRow>& Rows, float ScrollOffset)
     {
         FRowAnchor Result;
-        const FNamedRow* Best = nullptr;
-        // Prefer the first fully visible property. This deliberately does not
-        // anchor to Surface's transient category and header rows.
+        const FNamedRow* Before = nullptr;
+        const FNamedRow* After = nullptr;
+        // An Actor property can be BELOW the viewport when Surface rows
+        // occupy the screen. Never assume that the first later property is
+        // the one the user is looking at. Keep the closest property on
+        // either side, including the signed relative distance in rows.
         for (const FNamedRow& Row : Rows)
         {
-            if (Row.Index >= FMath::CeilToInt(ScrollOffset) && !Row.Path.IsEmpty() &&
-                (!Best || Row.Index < Best->Index))
+            if (Row.Path.IsEmpty() || Row.Index < 0) { continue; }
+            if (static_cast<float>(Row.Index) <= ScrollOffset)
             {
-                Best = &Row;
+                if (!Before || Row.Index > Before->Index) { Before = &Row; }
+            }
+            else if (!After || Row.Index < After->Index)
+            {
+                After = &Row;
             }
         }
+        const FNamedRow* Best = nullptr;
+        if (Before && After)
+        {
+            const float DistanceBefore = ScrollOffset - Before->Index;
+            const float DistanceAfter = After->Index - ScrollOffset;
+            Best = (DistanceBefore <= DistanceAfter) ? Before : After;
+        }
+        else { Best = Before ? Before : After; }
         if (Best)
         {
             Result.PropertyPath = Best->Path;
@@ -51,6 +66,7 @@ namespace SurfaceScrollAnchor
         if (!bValidTarget)
         {
             bHasLayout = false;
+            bObservedAlignment = false;
             UnchangedSeconds = 0.0f;
             return;
         }
@@ -58,6 +74,7 @@ namespace SurfaceScrollAnchor
         {
             PreviousLayoutHash = LayoutHash;
             UnchangedSeconds = 0.0f;
+            bObservedAlignment = false;
             bHasLayout = true;
         }
         else
@@ -70,8 +87,8 @@ namespace SurfaceScrollAnchor
     {
         // Require a post-release recovery interval AND a stable property-row
         // mapping. 12 arbitrary ticker updates were insufficient in Alpha 12.
-        return bHasLayout && SuccessfulRestores > 0 &&
-            ElapsedSeconds >= 0.90f && UnchangedSeconds >= 0.30f;
+        return bHasLayout && bObservedAlignment && SuccessfulRestores > 0 &&
+            ElapsedSeconds >= 1.25f && UnchangedSeconds >= 0.35f;
     }
 
     bool FRestoreStability::HasTimedOut() const

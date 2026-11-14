@@ -36,6 +36,10 @@ namespace SurfaceScrollAnchor
         uint32 PreviousLayoutHash = 0;
         bool bHasLayout = false;
         int32 SuccessfulRestores = 0;
+        // A SetScrollOffset request is not proof the virtualized table reached
+        // its target. Verify the next observed layout position before settling.
+        bool bObservedAlignment = false;
+        void ObserveAlignment(bool bAligned) { bObservedAlignment = bAligned; }
         void Observe(uint32 LayoutHash, bool bValidTarget, float DeltaSeconds);
         bool IsSettled() const;
         bool HasTimedOut() const;
