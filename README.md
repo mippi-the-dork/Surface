@@ -1,6 +1,6 @@
 # Surface
 
-> **2.0 development alpha:** Movement-time layout suppression is retained, with new height-preserving placeholders and post-movement Favorites cache invalidation. This Alpha 6 source requires UE 5.8.3 compilation and verification. See [ROADMAP.md](ROADMAP.md) and [DEV_NOTES.md](DEV_NOTES.md).
+> **Surface 2.0 Alpha 15:** Lightweight Component layout suppression during Actor dragging, with native property rows rebuilt when movement ends. Experimental scrolling, placeholder and frozen-preview features have been removed. See [ALPHA15_CLEANUP.md](ALPHA15_CLEANUP.md).
 
 **Edit component properties directly from an Actor's Details panel in Unreal Engine.**
 
@@ -11,7 +11,7 @@ Spend less time selecting individual Components just to find the property you ne
 ![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8.3-black?logo=unrealengine)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2064--bit-blue)
 ![Type](https://img.shields.io/badge/Plugin-Editor%20Only-green)
-![Version](https://img.shields.io/badge/Version-2.0.0--alpha.6-orange)
+![Version](https://img.shields.io/badge/Version-2.0.0--alpha.15-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ![Surface](Doc/Images/Surface-Hero.png)
@@ -1192,6 +1192,6 @@ Surface turns the Actor Details panel into a more complete view of the thing you
 Run `Surface.Profile.Start`, drag an Actor, and run `Surface.Profile.Stop`. New diagnostic stages: `MovementBegin`, `MovementEnd`, `CustomizeDuringMovement`, `ExternalLayoutDuringMovement`, `ComponentInstanceReplaced`, and `ComponentInstanceUnchanged`. These counters introduce no change to native Details refresh behavior.
 
 
-### Surface 2.0 Alpha 10 evaluation
+### Surface 2.0 Alpha 15 — stable movement policy
 
-Alpha 10 maintains lightweight layout suppression while moving an Actor. Experimental frozen text previews and measured blank placeholders are disabled by default because they did not reproduce native Details appearance. See `NATIVE_FREEZE_FEASIBILITY.md` for the source-backed limitations and next prototype criteria.
+Surface suppresses external Component property layouts during movement, then rebuilds the native rows on release. The removed scroll anchoring and experimental visual presentation paths are not part of this release. Scroll position changes during movement may still occur; preserving a stable scrollbar is not a release goal.

@@ -5,21 +5,15 @@
 class AActor;
 class UObject;
 class IPropertyUtilities;
-class IDetailsView;
 
 namespace SurfaceMovementPolicy
 {
     // Pure decision point so the safety policy is testable without an editor viewport.
     bool ShouldSkipExternalLayout(bool bIsSelectedActorMoving, bool bOptimizationEnabled);
     bool IsLightweightForSelection(const TArray<AActor*>& Actors);
-    // Preserve measured geometry during any anchored movement: expanded Surface
-    // sections may be above the viewport and must not collapse the rows below.
-    bool ShouldPreserveSpaceForSelection(const TArray<AActor*>& Actors);
     // Incremented after any actor movement ends, so cached negative Favorites are rescanned.
     uint64 GetFavoritesRefreshRevision();
     void ObserveDetails(const TArray<AActor*>& Actors, const TWeakPtr<IPropertyUtilities>& Utilities);
-    void ObserveView(const TArray<AActor*>& Actors, const TWeakPtr<IDetailsView>& View);
-    bool RestoreScrollAnchors(float DeltaTime);
     void BeginObjectMovement(UObject& Object);
     void EndObjectMovement(UObject& Object);
     // Poll native FavoriteProperties class metadata; no property layout generation.

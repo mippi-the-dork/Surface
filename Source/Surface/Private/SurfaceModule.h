@@ -1,4 +1,4 @@
-﻿// Copyright Mippithedork 2026, Inc. All Rights Reserved.
+// Copyright Mippithedork 2026, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -39,5 +39,4 @@ private:
     FDelegateHandle BeginMovementHandle;
     FDelegateHandle EndMovementHandle;
     FTSTicker::FDelegateHandle FavoritesTickerHandle;
-    FTSTicker::FDelegateHandle ScrollAnchorTickerHandle;
 };
