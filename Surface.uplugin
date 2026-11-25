@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 15,
-	"VersionName": "2.0.0-alpha.15",
+	"Version": 17,
+	"VersionName": "2.0.0-rc.1",
 	"FriendlyName": "Surface",
 	"Description": "Brings component properties into the Actor’s Details panel, with component filtering, favorites, and quick actor/component selection. Saves filters and expansion preferences between editor sessions.",
 	"Category": "Actor Details Panel",
@@ -23,6 +23,6 @@
 			]
 		}
 	],
-	"IsBetaVersion": false,
-	"IsExperimentalVersion": true
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false
 }

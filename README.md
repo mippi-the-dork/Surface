@@ -1,6 +1,6 @@
 # Surface
 
-> **Surface 2.0 Alpha 15:** Lightweight Component layout suppression during Actor dragging, with native property rows rebuilt when movement ends. Experimental scrolling, placeholder and frozen-preview features have been removed. See [ALPHA15_CLEANUP.md](ALPHA15_CLEANUP.md).
+> **Surface 2.0 RC1 (source candidate):** Optimized Component Details during Actor dragging, with improved Favorites synchronization and 11 passing native automation tests in the user’s UE 5.8.3 project. Final manual acceptance is pending. See [RC1 acceptance and release notes](RELEASE_CANDIDATE.md).
 
 **Edit component properties directly from an Actor's Details panel in Unreal Engine.**
 
@@ -11,7 +11,7 @@ Spend less time selecting individual Components just to find the property you ne
 ![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.8.3-black?logo=unrealengine)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2064--bit-blue)
 ![Type](https://img.shields.io/badge/Plugin-Editor%20Only-green)
-![Version](https://img.shields.io/badge/Version-2.0.0--alpha.15-orange)
+![Version](https://img.shields.io/badge/Version-2.0.0--rc.1-orange)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ![Surface](Doc/Images/Surface-Hero.png)
@@ -690,9 +690,7 @@ The Actor becomes the main editing surface for the entire assembly.
 
 # Installation
 
-Surface can be installed through **Fab**, from a **precompiled GitHub Release**, or directly from the **GitHub source**.
-
-For most users, the Fab or GitHub Release installation is recommended.
+Surface is distributed as source for this release candidate. A packaged GitHub Release or Fab installation may be available separately; do not assume RC1 has been published through either channel. For RC1, extract the supplied `Surface/` folder into your project’s `Plugins/` directory and rebuild your Editor target.
 
 ---
 
@@ -727,13 +725,7 @@ https://github.com/mippi-the-dork/Surface/releases
 
 Download the latest packaged plugin matching your Unreal Engine version and platform.
 
-For the current release:
-
-```text
-Surface 1.0.4
-Unreal Engine 5.8.2
-Windows 64-bit
-```
+The previously documented packaged release was Surface 1.0.4 for Unreal Engine 5.8.2 on Windows 64-bit. **RC1 is a source package**, not a precompiled binary release. For RC1, use the source installation instructions below.
 
 Do not use GitHub's automatically generated **Source code** ZIP as a precompiled plugin package.
 
@@ -876,13 +868,13 @@ Rebuild the project if the source has changed.
 
 # Compatibility
 
-The current Surface release targets:
+This Surface 2.0 release candidate targets:
 
 | | |
 |---|---|
-| **Surface Version** | 1.0.4 |
+| **Surface Version** | 2.0.0-rc.1 (source candidate) |
 | **Unreal Engine** | 5.8.x |
-| **Tested Version** | 5.8.2 |
+| **Validated in user project** | 5.8.3 (compilation and 11 native automation tests) |
 | **Platform** | Windows 64-bit |
 | **Plugin Type** | Editor |
 | **Runtime Dependency** | None |
@@ -890,7 +882,7 @@ The current Surface release targets:
 | **Runtime Components** | None |
 | **Packaged Game Impact** | None |
 
-Surface's plugin descriptor targets Unreal Engine 5.8.0, with the current packaged release built for Unreal Engine 5.8.2 on Windows 64-bit.
+Surface’s plugin descriptor targets Unreal Engine 5.8.0. RC1 has been compiled and its native automated tests run by the user on 5.8.3, Windows 64-bit. Manual RC1 acceptance remains pending; no precompiled RC1 binary is included.
 
 Compatibility with additional Unreal Engine versions or platforms should not be assumed unless explicitly listed in a release.
 
@@ -1172,7 +1164,7 @@ Surface is intended to remain focused on making Actor Component properties easie
 
 Surface is distributed under the **MIT License**.
 
-See [`LICENSE`](LICENSE) for details.
+Refer to the project repository for the full license terms. The source distribution does not embed a separate license file.
 
 ---
 
@@ -1187,11 +1179,12 @@ The plugin was built around a simple idea:
 Surface turns the Actor Details panel into a more complete view of the thing you're actually editing.
 
 
-### Surface 2.0 Alpha 4 profiling
+---
 
-Run `Surface.Profile.Start`, drag an Actor, and run `Surface.Profile.Stop`. New diagnostic stages: `MovementBegin`, `MovementEnd`, `CustomizeDuringMovement`, `ExternalLayoutDuringMovement`, `ComponentInstanceReplaced`, and `ComponentInstanceUnchanged`. These counters introduce no change to native Details refresh behavior.
+## Surface 2.0 RC1: performance behavior and limitations
 
+To keep Actor movement responsive, Surface temporarily suppresses its expensive external Component property layouts while an Actor is dragged. Native Component property rows return once the drag finishes. The surrounding Details panel can change its scroll position during this process; this is a known, accepted limitation. The plugin does not attempt to freeze or restore scroll position.
 
-### Surface 2.0 Alpha 15 — stable movement policy
+For performance investigation, use `Surface.Profile.Start`, `Surface.Profile.Stop`, and `Surface.Profile.Report` in the Unreal Editor console.
 
-Surface suppresses external Component property layouts during movement, then rebuilds the native rows on release. The removed scroll anchoring and experimental visual presentation paths are not part of this release. Scroll position changes during movement may still occur; preserving a stable scrollbar is not a release goal.
+For the RC1 validation history, manual checklist, and known limitations, read [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md).
